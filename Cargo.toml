@@ -1,0 +1,11 @@
+[package]
+name = "troubadour"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+cpal = { version = "*"}
+anyhow = "1.0"
+rdev = "0.5"
+rodio = "0.17"
