@@ -2,12 +2,11 @@ use cpal::{Device, traits::{DeviceTrait, HostTrait}};
 use std::{fs, path::PathBuf, sync::{Arc, Mutex}};
 use std::env;
 use rdev::{listen, Event, EventType, Key};
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
 use std::io::BufReader;
 use std::fs::File;
 use anyhow::Result;
 
-// Состояние для отслеживания зажатых клавиш-модификаторов
 struct ModifierState {
     alt_pressed: bool,
 }
@@ -20,7 +19,6 @@ impl ModifierState {
     }
 }
 
-// Глобальное состояние приложения
 struct AppState {
     sounds: Vec<PathBuf>,
     stream_handle: OutputStreamHandle,
@@ -29,9 +27,6 @@ struct AppState {
 impl AppState {
     fn new() -> Result<Self> {
         let (_stream, stream_handle) = OutputStream::try_default()?;
-        
-        // Сохраняем _stream в статическую переменную, чтобы он не был уничтожен
-        // Это небольшой хак, но он работает
         std::mem::forget(_stream);
         
         Ok(Self {
@@ -48,10 +43,9 @@ impl AppState {
         let path = self.sounds[index].clone();
         let stream_handle = self.stream_handle.clone();
         
-        // Запускаем воспроизведение в отдельном потоке
         std::thread::spawn(move || {
             if let Err(e) = play_file(stream_handle, path) {
-                eprintln!("❌ Ошибка воспроизведения: {}", e);
+                eprintln!("Ошибка воспроизведения: {}", e);
             }
         });
         
@@ -59,7 +53,6 @@ impl AppState {
     }
 }
 
-// Отдельная функция для воспроизведения файла
 fn play_file(stream_handle: OutputStreamHandle, path: PathBuf) -> Result<()> {
     let file = BufReader::new(File::open(path)?);
     let source = Decoder::new(file)?;
@@ -74,38 +67,31 @@ fn play_file(stream_handle: OutputStreamHandle, path: PathBuf) -> Result<()> {
 fn main() {
     println!("{}, version {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    // Инициализируем состояние приложения
     let state = match AppState::new() {
         Ok(mut s) => {
-            // Загружаем звуки
             s.sounds = locate_sound();
             if s.sounds.is_empty() {
-                eprintln!("❌ Нет звуковых файлов в папке 'sounds'");
+                eprintln!("Нет звуковых файлов в папке 'sounds'");
                 return;
             }
-            println!("✅ Загружено {} звуковых файлов", s.sounds.len());
+            println!("Загружено {} звуковых файлов", s.sounds.len());
             Arc::new(s)
         }
         Err(e) => {
-            eprintln!("❌ Ошибка инициализации аудио: {}", e);
+            eprintln!("Ошибка инициализации аудио: {}", e);
             return;
         }
     };
-
-    // Находим устройство для виртуального кабеля (опционально)
     match configure_device() {
         Ok(device) => println!("Использую устройство: {}", device.name().unwrap()),
-        Err(_) => println!("⚠️ Виртуальный кабель не найден, звук будет идти в динамики"),
+        Err(_) => println!("Виртуальный кабель не найден, звук будет идти в динамики"),
     }
-
-    // Настраиваем горячие клавиши
     configure_hotkeys(Arc::clone(&state));
     
-    println!("\n🎹 Soundpad запущен! Используйте Alt+[1..{}] для воспроизведения звуков", 
+    println!("\ntroubadour запущен! Используйте Alt+[1..{}] для воспроизведения звуков", 
         state.sounds.len().min(9));
     println!("Нажмите Ctrl+C для выхода");
     
-    // Держим программу запущенной
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
@@ -117,7 +103,7 @@ fn locate_sound() -> Vec<PathBuf> {
     path_to_samples.push("sounds");
 
     if path_to_samples.exists() {
-        println!("📁 Поиск в папке: {:?}", path_to_samples);
+        println!("Поиск в папке: {:?}", path_to_samples);
         
         for entry in fs::read_dir(path_to_samples).expect("unable to list") {
             let path = entry.unwrap().path();
@@ -131,9 +117,9 @@ fn locate_sound() -> Vec<PathBuf> {
             }
         }
     } else {
-        eprintln!("❌ Папка 'sounds' не найдена");
+        eprintln!("Папка 'sounds' не найдена");
         fs::create_dir_all("sounds").expect("не удалось создать папку sounds");
-        println!("✅ Создана папка 'sounds'. Положите в неё MP3 файлы и перезапустите программу");
+        println!("Создана папка 'sounds'. Положите в неё MP3 файлы и перезапустите программу");
     }
 
     sounds.sort();
@@ -141,7 +127,7 @@ fn locate_sound() -> Vec<PathBuf> {
 }
 
 fn configure_hotkeys(state: Arc<AppState>) {
-    println!("\n🎹 Назначенные горячие клавиши (Alt+):");
+    println!("\nНазначенные горячие клавиши (Alt+):");
     for (i, sound) in state.sounds.iter().enumerate() {
         if i < 9 {
             let file_name = sound.file_name().unwrap().to_string_lossy();
@@ -152,7 +138,6 @@ fn configure_hotkeys(state: Arc<AppState>) {
         println!("  ... и ещё {} звуков (не привязаны)", state.sounds.len() - 9);
     }
 
-    // Запускаем прослушивание клавиш в отдельном потоке
     std::thread::spawn(move || {
         let modifier_state = Arc::new(Mutex::new(ModifierState::new()));
         
@@ -193,11 +178,10 @@ fn handle_key_event(
                         
                         if index < state.sounds.len() {
                             let file_name = state.sounds[index].file_name().unwrap().to_string_lossy();
-                            println!("▶️ Alt+{}: {}", index + 1, file_name);
+                            println!("Alt+{}: {}", index + 1, file_name);
                             
-                            // Воспроизводим через состояние
                             if let Err(e) = state.play_sound(index) {
-                                eprintln!("❌ Ошибка воспроизведения: {}", e);
+                                eprintln!("Ошибка воспроизведения: {}", e);
                             }
                         }
                     }
